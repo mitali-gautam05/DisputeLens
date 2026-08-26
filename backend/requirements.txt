@@ -1,0 +1,15 @@
+fastapi
+starlette<1.0.0
+uvicorn[standard]
+jinja2
+python-multipart
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+chromadb
+fastembed
+groq
+faker
+python-dotenv

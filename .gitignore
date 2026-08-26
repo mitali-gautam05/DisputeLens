@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+backend/.env
+backend/vectorstore/
+backend/data/synthetic_evidence.jsonl
+backend/data/audit_log.db

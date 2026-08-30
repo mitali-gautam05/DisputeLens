@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Cases — DisputeLens{% endblock %}
+{% block content %}
+<h1>Case queue</h1>
+<div class="filter-bar">
+    <button class="filter-btn active" data-tier="all">All</button>
+    <button class="filter-btn" data-tier="high_risk_auto_flag">High Risk</button>
+    <button class="filter-btn" data-tier="medium_risk_human_review">Medium Risk</button>
+    <button class="filter-btn" data-tier="low_risk_log_only">Low Risk</button>
+</div>
+<div class="dispute-grid" id="dispute-grid">
+    {% for d in disputes %}
+    <div class="dispute-card tier-{{ d.risk_tier }}" data-tier="{{ d.risk_tier }}">
+        <div class="dispute-header">
+            <span class="txn-id">{{ d.transaction_id }}</span>
+            <span class="risk-badge">{{ d.risk_tier.replace('_', ' ') }}</span>
+        </div>
+        <div class="dispute-amount">Rs {{ "%.2f"|format(d.amount) }}</div>
+        <div class="dispute-reason">{{ d.reason_code.replace('_', ' ') }}</div>
+        <div class="confidence-bar">
+            <div class="confidence-fill" style="width: {{ (d.model_confidence * 100)|round(0)|int }}%"></div>
+        </div>
+        <span class="confidence-label">{{ "%.1f"|format(d.model_confidence * 100) }}% confidence</span>
+
+        <div class="card-detail">
+            <p class="card-detail-text">
+                {% if d.risk_tier == 'high_risk_auto_flag' %}
+                    High confidence of chargeback. An evidence response has been auto-drafted
+                    and is awaiting review before it can be used.
+                {% elif d.risk_tier == 'medium_risk_human_review' %}
+                    Moderate confidence. A draft response is generated but needs human
+                    sign-off before use.
+                {% else %}
+                    Low confidence. No response is drafted — this case is logged for the
+                    audit trail only.
+                {% endif %}
+            </p>
+            <a href="/dispute/{{ d.transaction_id }}" class="view-case-btn">View full case &rarr;</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tier = btn.dataset.tier;
+        document.querySelectorAll('.dispute-card').forEach(card => {
+            card.style.display = (tier === 'all' || card.dataset.tier === tier) ? 'flex' : 'none';
+        });
+    });
+});
+
+document.querySelectorAll('.dispute-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.view-case-btn')) return;
+        document.querySelectorAll('.dispute-card.expanded').forEach(other => {
+            if (other !== card) other.classList.remove('expanded');
+        });
+        card.classList.toggle('expanded');
+    });
+});
+</script>
+{% endblock %}

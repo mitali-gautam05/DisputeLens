@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ transaction_id }} — DisputeLens{% endblock %}
+{% block content %}
+<a href="/cases" class="back-link">&larr; All cases</a>
+<div class="mode-toggle">
+    <button id="standard-btn" class="mode-btn active" onclick="switchMode('standard')">Standard pipeline</button>
+    <button id="agent-btn" class="mode-btn" onclick="switchMode('agent')">Agentic mode</button>
+</div>
+<div id="result-container">
+    <div class="skeleton">
+        <div class="skeleton-line skeleton-title"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line" style="width: 70%"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const transactionId = "{{ transaction_id }}";
+let currentMode = 'standard';
+
+function formatLetter(text) {
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+}
+
+function copyLetter(rawText) {
+    navigator.clipboard.writeText(rawText).then(() => {
+        const btn = document.getElementById('copy-btn');
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 1500);
+    });
+}
+
+function downloadLetter(rawText, txnId) {
+    const blob = new Blob([rawText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dispute_response_${txnId}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function renderAgentTrace(trace) {
+    if (!trace || trace.length === 0) return '';
+    return `
+        <div class="agent-trace">
+            <strong>Agent reasoning trail:</strong>
+            <ol>${trace.map(step => `<li>${step}</li>`).join('')}</ol>
+        </div>
+    `;
+}
+
+async function loadDispute(mode) {
+    const container = document.getElementById('result-container');
+    container.innerHTML = `
+        <div class="skeleton">
+            <div class="skeleton-line skeleton-title"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line" style="width: 70%"></div>
+        </div>
+    `;
+    try {
+        const url = mode === 'agent'
+            ? `/api/disputes/${transactionId}/agent`
+            : `/api/disputes/${transactionId}`;
+        const res = await fetchJSON(url);
+        if (!res.success) {
+            container.innerHTML = `<p class="error">Error: ${res.error}</p>`;
+            return;
+        }
+        const d = res.data;
+        const traceHtml = mode === 'agent' ? renderAgentTrace(d.agent_trace) : '';
+
+        if (d.status === 'logged_only') {
+            container.innerHTML = `
+                <div class="status-banner status-logged">Logged Only — Low Risk</div>
+                <p>${d.message}</p>
+                ${traceHtml}
+            `;
+            return;
+        }
+
+        if (d.status === 'pending_human_review' && !d.letter) {
+            container.innerHTML = `
+                <div class="status-banner status-review">Escalated to Human Review</div>
+                <p>${d.message}</p>
+                ${traceHtml}
+            `;
+            return;
+        }
+
+        const statusLabel = d.status === 'auto_drafted' ? 'Auto-Drafted (High Confidence)' : 'Pending Human Review';
+        const statusClass = d.status === 'auto_drafted' ? 'status-auto' : 'status-review';
+        const cacheNote = d.from_cache ? '<span class="cache-badge">cached</span>' : '';
+
+        container.innerHTML = `
+            <div class="status-banner ${statusClass}">${statusLabel} ${cacheNote}</div>
+            <div class="dispute-meta">
+                <span>Amount: Rs ${d.amount.toFixed(2)}</span>
+                <span>Reason: ${d.reason_code.replace(/_/g, ' ')}</span>
+            </div>
+            <div class="confidence-note"><strong>Evidence confidence note:</strong> ${d.confidence_note}</div>
+            <div class="letter-actions">
+                <button id="copy-btn" onclick='copyLetter(${JSON.stringify(d.letter)})'>Copy letter</button>
+                <button onclick='downloadLetter(${JSON.stringify(d.letter)}, "${transactionId}")'>Download .txt</button>
+            </div>
+            <div class="letter-box">${formatLetter(d.letter)}</div>
+            <div class="citations">
+                <strong>Key citations:</strong>
+                <ul>${d.key_citations.map(c => `<li>${c}</li>`).join('')}</ul>
+            </div>
+            <div class="similar-cases">
+                <strong>Similar cases referenced:</strong> ${d.similar_cases_used.join(', ')}
+            </div>
+            ${traceHtml}
+        `;
+    } catch (e) {
+        container.innerHTML = `<p class="error">Failed to load: ${e.message}</p>`;
+    }
+}
+
+function switchMode(mode) {
+    if (mode === currentMode) return;
+    currentMode = mode;
+    document.getElementById('standard-btn').classList.toggle('active', mode === 'standard');
+    document.getElementById('agent-btn').classList.toggle('active', mode === 'agent');
+    loadDispute(mode);
+}
+
+loadDispute('standard');
+</script>
+{% endblock %}

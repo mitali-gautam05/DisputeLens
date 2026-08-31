@@ -13,3 +13,4 @@ fastembed
 groq
 faker
 python-dotenv
+shap

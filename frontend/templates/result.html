@@ -6,6 +6,7 @@
     <button id="standard-btn" class="mode-btn active" onclick="switchMode('standard')">Standard pipeline</button>
     <button id="agent-btn" class="mode-btn" onclick="switchMode('agent')">Agentic mode</button>
 </div>
+<div id="explain-container"></div>
 <div id="result-container">
     <div class="skeleton">
         <div class="skeleton-line skeleton-title"></div>
@@ -55,6 +56,101 @@ function renderAgentTrace(trace) {
     `;
 }
 
+async function loadExplanation() {
+    const container = document.getElementById('explain-container');
+    try {
+        const res = await fetchJSON(`/api/disputes/${transactionId}/explain`);
+        if (!res.success) return;
+
+        const d = res.data;
+        const maxAbs = Math.max(...d.top_features.map(f => Math.abs(f.shap_value)), 0.001);
+
+        const rows = d.top_features.map(f => {
+            const dirLabel = f.direction === 'increased_risk' ? 'increased risk' : 'decreased risk';
+            const dirClass = f.direction === 'increased_risk' ? 'shap-up' : 'shap-down';
+            const barWidth = (Math.abs(f.shap_value) / maxAbs) * 100;
+            const sign = f.shap_value > 0 ? '+' : '';
+            return `
+                <div class="explain-row">
+                    <div class="explain-row-header">
+                        <span class="explain-label">${f.label}</span>
+                        <span class="explain-weight ${dirClass}">${dirLabel}</span>
+                    </div>
+                    <div class="explain-bar-track">
+                        <div class="explain-bar-fill ${dirClass}" style="width: ${barWidth}%"></div>
+                    </div>
+                    <p class="explain-detail">
+                        This transaction's value: <strong>${f.value}</strong> — SHAP contribution: <strong>${sign}${f.shap_value}</strong>
+                    </p>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="explain-panel">
+                <strong class="explain-title">Why the model flagged this (${(d.model_confidence * 100).toFixed(1)}% confidence)</strong>
+                <p class="explain-note">Per-case SHAP values — the actual features that drove THIS specific prediction, not just global model weights.</p>
+                ${rows}
+            </div>
+        `;
+    } catch (e) { /* explanation is supplementary — fail silently */ }
+}
+loadExplanation();
+
+function renderReviewSection(reviewDecision) {
+    if (reviewDecision) {
+        const label = reviewDecision.decision === 'approved' ? 'Approved' : 'Rejected';
+        const cls = reviewDecision.decision === 'approved' ? 'review-approved' : 'review-rejected';
+        const when = new Date(reviewDecision.timestamp).toLocaleString();
+        return `
+            <div class="review-panel">
+                <span class="review-badge ${cls}">${label}</span>
+                <span class="review-when">by human review on ${when}</span>
+                <button class="review-reset-btn" onclick="resetReview()">Undo</button>
+            </div>
+        `;
+    }
+    return `
+        <div class="review-panel">
+            <span class="review-prompt">Human review required before this response is used:</span>
+            <div class="review-actions">
+                <button class="review-btn review-approve-btn" onclick="submitReview('approved')">Approve</button>
+                <button class="review-btn review-reject-btn" onclick="submitReview('rejected')">Reject</button>
+            </div>
+        </div>
+    `;
+}
+
+async function submitReview(decision) {
+    const confirmed = confirm(`Confirm: mark this case as "${decision}"? This will be saved to the audit log.`);
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`/api/disputes/${transactionId}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ decision, notes: '' })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            alert('Could not save review decision: ' + data.error);
+            return;
+        }
+        loadDispute(currentMode);
+    } catch (e) {
+        alert('Failed to submit review: ' + e.message);
+    }
+}
+
+async function resetReview() {
+    try {
+        await fetch(`/api/disputes/${transactionId}/review`, { method: 'DELETE' });
+        loadDispute(currentMode);
+    } catch (e) {
+        alert('Failed to reset: ' + e.message);
+    }
+}
+
 async function loadDispute(mode) {
     const container = document.getElementById('result-container');
     container.innerHTML = `
@@ -98,6 +194,7 @@ async function loadDispute(mode) {
         const statusLabel = d.status === 'auto_drafted' ? 'Auto-Drafted (High Confidence)' : 'Pending Human Review';
         const statusClass = d.status === 'auto_drafted' ? 'status-auto' : 'status-review';
         const cacheNote = d.from_cache ? '<span class="cache-badge">cached</span>' : '';
+        const reviewHtml = renderReviewSection(d.review_decision);
 
         container.innerHTML = `
             <div class="status-banner ${statusClass}">${statusLabel} ${cacheNote}</div>
@@ -118,6 +215,7 @@ async function loadDispute(mode) {
             <div class="similar-cases">
                 <strong>Similar cases referenced:</strong> ${d.similar_cases_used.join(', ')}
             </div>
+            ${reviewHtml}
             ${traceHtml}
         `;
     } catch (e) {

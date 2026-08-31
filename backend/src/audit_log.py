@@ -107,3 +107,46 @@ def cache_result(transaction_id, result):
     )
     conn.commit()
     conn.close()
+
+    # ---------- Human review decisions (added for Approve/Reject loop) ----------
+
+def init_review_table():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS review_actions (
+            transaction_id TEXT PRIMARY KEY,
+            decision TEXT NOT NULL,
+            notes TEXT,
+            timestamp TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def set_review_decision(transaction_id, decision, notes=""):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "INSERT OR REPLACE INTO review_actions (transaction_id, decision, notes, timestamp) VALUES (?, ?, ?, ?)",
+        (transaction_id, decision, notes, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_review_decision(transaction_id):
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        "SELECT decision, notes, timestamp FROM review_actions WHERE transaction_id = ?",
+        (transaction_id,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return {"decision": row[0], "notes": row[1], "timestamp": row[2]}
+    return None
+
+def clear_review_decision(transaction_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM review_actions WHERE transaction_id = ?", (transaction_id,))
+    conn.commit()
+    conn.close()

@@ -5,3 +5,4 @@ backend/.env
 backend/vectorstore/
 backend/data/synthetic_evidence.jsonl
 backend/data/audit_log.db
+backend/models/classifier.pkl

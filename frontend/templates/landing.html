@@ -1,17 +1,54 @@
 {% extends "base.html" %}
 {% block title %}DisputeLens — Evidence-grounded chargeback defense{% endblock %}
 {% block content %}
-<section class="hero">
-    <span class="hero-eyebrow">AI Risk Manager</span>
-    <h1 class="hero-title">Chargebacks lose merchants money before anyone reads the evidence.</h1>
-    <p class="hero-sub">
-        DisputeLens flags at-risk transactions, retrieves the evidence that actually supports
-        a defense, and drafts a citation-backed response — with a human in the loop at every
-        step that matters.
-    </p>
-    <div class="hero-actions">
-        <a href="/cases" class="btn-primary">Open case queue &rarr;</a>
-        <a href="/dashboard" class="btn-secondary">View the ledger</a>
+<section class="hero-photo">
+    <div class="hero-grid">
+        <div>
+            <div class="hero-kicker">AI risk manager for chargeback disputes</div>
+            <h1 class="hero-title-dark">Chargebacks lose merchants money before anyone reads the evidence.</h1>
+            <p class="hero-sub-dark">
+                DisputeLens flags at-risk transactions, retrieves the evidence that actually supports
+                a defense, and drafts a citation-backed response — with a human in the loop at every
+                step that matters.
+            </p>
+            <div class="hero-actions">
+                <a href="/cases" class="btn-primary">Open case queue &rarr;</a>
+                <a href="/dashboard" class="btn-secondary-dark">View the ledger</a>
+            </div>
+        </div>
+
+        <div class="letter-wrap">
+            <div class="letter-card">
+                <div class="letter-head">
+                    <span>RE: TXN_218</span>
+                    <span>DRAFT</span>
+                </div>
+                <div class="letter-line">Dear Card Network,</div>
+                <br>
+                <div class="letter-line">We are writing to contest the</div>
+                <div class="letter-line">chargeback filed against order</div>
+                <div class="letter-line">#4821, reason code: not as</div>
+                <div class="letter-line">described.</div>
+                <br>
+                <div class="letter-line">Delivery was confirmed via the</div>
+                <div class="letter-line">carrier's tracking record, with</div>
+                <div class="letter-line">signature captured at the door</div>
+                <div class="letter-line"><span class="cite">[Evidence: delivery log #A12]</span></div>
+                <br>
+                <div class="letter-line">Two prior disputes on this</div>
+                <div class="letter-line">account were resolved in the</div>
+                <div class="letter-line">merchant's favor on similar</div>
+                <div class="letter-line"><span class="cite">[Precedent 2, Precedent 4]</span></div>
+            </div>
+
+            <svg class="stamp" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="3" opacity="0.9" stroke-dasharray="4 3"/>
+                <circle cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.7"/>
+                <text x="60" y="52" text-anchor="middle" class="stamp-text" font-size="10" fill="#8C82F2" opacity="0.95" font-weight="700" letter-spacing="1">HUMAN</text>
+                <text x="60" y="68" text-anchor="middle" class="stamp-text" font-size="10" fill="#8C82F2" opacity="0.95" font-weight="700" letter-spacing="1">REVIEW</text>
+                <text x="60" y="84" text-anchor="middle" class="stamp-text" font-size="8" fill="#8C82F2" opacity="0.8" letter-spacing="1">PENDING</text>
+            </svg>
+        </div>
     </div>
 </section>
 

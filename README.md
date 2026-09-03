@@ -17,6 +17,10 @@ never auto-submits anything on its own.
 - [Classifier performance](#classifier-performance)
 - [Risk tiers and gating](#risk-tiers-and-gating)
 - [Evidence generation and explainability](#evidence-generation-and-explainability)
+- [Per-case explainability (SHAP)](#per-case-explainability-shap)
+- [Agentic mode](#agentic-mode)
+- [Human review loop](#human-review-loop)
+- [Business impact and threshold exploration](#business-impact-and-threshold-exploration)
 - [What works](#what-works)
 - [Limitations](#limitations)
 - [Roadmap](#roadmap)
@@ -39,6 +43,9 @@ work while keeping a human in the loop for anything that matters:
 3. **Bounded, gated action** — nothing is auto-submitted. High-confidence cases get an
    auto-drafted letter awaiting review; medium-confidence cases require explicit human
    sign-off; low-confidence cases are logged only.
+4. **Two ways to resolve a case** — a fixed pipeline (classify → retrieve → generate),
+   or an agentic mode where the model decides per-case whether it needs more evidence,
+   should escalate, or is ready to finalize.
 
 ## Architecture
 
@@ -50,7 +57,7 @@ Synthetic dispute data → Embedding + vector store (ChromaDB) → Risk classifi
 See `architecture.png` for the full diagram.
 
 **Stack:** FastAPI · XGBoost · ChromaDB · fastembed (multilingual-e5-large) ·
-Groq (openai/gpt-oss-20b) · SQLite · vanilla HTML/CSS/JS.
+Groq (openai/gpt-oss-20b) · SHAP · SQLite · vanilla HTML/CSS/JS.
 Entirely free-tier — zero API cost to build or run.
 
 ## Dataset
@@ -89,7 +96,9 @@ Precision of 0.33 is roughly 6.5x the random baseline (5.1%).
 **Why threshold 0.5:** the cost of missing a real chargeback (false negative) is
 outright financial loss for the merchant; the cost of a false positive is one
 unnecessary human review — cheap and non-blocking under the gated design below. This
-asymmetry justified optimizing for recall over precision.
+asymmetry justified optimizing for recall over precision. The dashboard includes an
+interactive threshold slider so this tradeoff can be explored directly rather than
+taken on faith — see [Business impact and threshold exploration](#business-impact-and-threshold-exploration).
 
 ## Risk tiers and gating
 
@@ -112,12 +121,61 @@ confirmation entirely — the current prompt ties the language to the actual
 `has_strong_evidence` signal in the data instead of the model's own framing, so the
 confidence stated in a letter matches the evidence actually behind it.
 
+## Per-case explainability (SHAP)
+
+Each case detail page shows *why the classifier flagged it* — not just a global
+feature-importance ranking, but the actual SHAP contribution for that specific
+transaction, computed with `shap.TreeExplainer` against the trained model.
+
+This replaced an earlier version that displayed the model's global feature
+importances alongside each transaction's raw values. That approach looked plausible
+but was misleading: a transaction could be flagged with high confidence while its
+top-weighted global feature sat right at the "clean transaction" average — the real
+driver was a lower-weighted feature invisible in a global ranking. Per-case SHAP values
+fix this by showing what actually pushed *this* prediction, in which direction, and by
+how much.
+
+## Agentic mode
+
+Alongside the fixed classify → retrieve → generate pipeline, each case can also be run
+through an agentic pipeline where the model has three tools — `retrieve_more_evidence`,
+`escalate_to_human`, and `finalize_response` — and decides for itself which to use,
+turn by turn, based on how confident it is in the evidence so far.
+
+The agent is bounded: a hard iteration cap means it always resolves to either a
+finalized draft or a safe escalation, never an infinite loop. Its `finalize_response`
+output still passes through the same risk-tier gate as the standard pipeline — the
+agent can decide *when* it's ready to draft, but never bypasses human review for
+high-confidence cases. Every run's reasoning trail (what it retrieved, why it
+escalated, or why it finalized) is shown alongside the result.
+
+## Human review loop
+
+Cases requiring review can be explicitly **approved** or **rejected** from the case
+detail page. The decision is persisted (SQLite) and shown on reload, with an undo
+option — this closes the loop on "bounded and gated" from a status label into an
+actual recorded human action with a timestamp.
+
+## Business impact and threshold exploration
+
+The dashboard ("Ledger") includes:
+
+- **Cost-weighted business impact** — chargeback value caught, chargeback value missed,
+  the cost of false-alarm reviews (an explicitly disclosed illustrative assumption, not
+  a fabricated precise figure), and net impact versus a no-model baseline.
+- **An interactive threshold slider** — dragging it recomputes precision, recall, and
+  business impact live, client-side, against the held-out set's raw scores. This makes
+  the recall-over-precision tradeoff behind the default threshold something a reviewer
+  can explore directly rather than take on faith.
+
 ## What works
 
 - Full pipeline — classification → retrieval → grounded generation → audit logging —
-  runs end to end
+  runs end to end, in both standard and agentic modes
 - Citations trace to real retrieved evidence, not fabricated references
 - Gated action routing prevents any fully-automated dispute submission
+- Human review decisions are recorded, not just displayed
+- Per-case explainability reflects the actual prediction, not a global average
 - Complete audit trail (SQLite) of every decision the system makes
 
 ## Limitations
@@ -131,12 +189,15 @@ confidence stated in a letter matches the evidence actually behind it.
   improvement before high-risk cases could be auto-drafted without review
 - Single-month data source limits confidence in how well time-based features
   generalize to other periods
+- The illustrative review-cost assumption ($50/review) is a placeholder for
+  demonstrating the business-impact calculation, not a calibrated real-world figure
 
 ## Roadmap
 
 - Additional behavioral features — transaction velocity, cross-card patterns
 - A feedback loop where human review outcomes retrain the classifier
 - Real evidence-source integrations in place of synthetic generation
+- Calibrating the review-cost assumption against real analyst time data
 
 ## Running locally
 
